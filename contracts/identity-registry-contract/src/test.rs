@@ -3,8 +3,8 @@
 extern crate std;
 
 use crate::{IdentityRegistryContract, IdentityRegistryContractClient};
-use soroban_sdk::{Env, testutils::Address as _, Symbol, Address, IntoVal};
-use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation};
+use soroban_sdk::{Env, testutils::Address as _, Symbol, Address, IntoVal, TryIntoVal};
+use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
 
 #[test]
 fn test_initialization() {
@@ -70,4 +70,27 @@ fn test_add_expert_unauthorized() {
     client.init(&admin);
 
     client.add_expert(&expert);
+}
+
+#[test]
+fn test_expert_status_changed_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+    
+    let contract_id = env.register_contract(None, IdentityRegistryContract);
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let expert = Address::generate(&env);
+
+    client.init(&admin);
+    client.add_expert(&expert);
+
+    let events = env.events().all();
+    let event = events.last().unwrap();
+
+    assert_eq!(event.0, contract_id);
+    
+    let topic: Symbol = event.1.get(0).unwrap().try_into_val(&env).unwrap();
+    assert_eq!(topic, Symbol::new(&env, "status_change"));
 }
