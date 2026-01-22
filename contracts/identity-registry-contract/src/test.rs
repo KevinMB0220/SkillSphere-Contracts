@@ -96,6 +96,7 @@ fn test_batch_verification_max_vec() {
     client.batch_add_experts(&experts);
 }
 
+#[test]
 fn test_add_expert() {
     let env = Env::default();
     env.mock_all_auths();

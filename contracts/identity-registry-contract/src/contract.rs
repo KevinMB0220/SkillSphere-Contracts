@@ -1,4 +1,4 @@
-use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
+use soroban_sdk::{Address, Env, Vec};
 use crate::storage;
 use crate::events;
 use crate::{error::RegistryError, types::ExpertStatus};
