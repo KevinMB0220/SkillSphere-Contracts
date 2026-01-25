@@ -8,8 +8,9 @@ mod types;
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contractimpl, Address, Env};
+use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
 use crate::error::VaultError;
+use crate::types::BookingRecord;
 
 #[contract]
 pub struct PaymentVaultContract;
@@ -46,5 +47,20 @@ impl PaymentVaultContract {
         actual_duration: u64,
     ) -> Result<(), VaultError> {
         contract::finalize_session(&env, booking_id, actual_duration)
+    }
+
+    /// Get all booking IDs for a specific user
+    pub fn get_user_bookings(env: Env, user: Address) -> Vec<u64> {
+        storage::get_user_bookings(&env, &user)
+    }
+
+    /// Get all booking IDs for a specific expert
+    pub fn get_expert_bookings(env: Env, expert: Address) -> Vec<u64> {
+        storage::get_expert_bookings(&env, &expert)
+    }
+
+    /// Get booking details by booking ID (read-only)
+    pub fn get_booking(env: Env, booking_id: u64) -> Option<BookingRecord> {
+        storage::get_booking(&env, booking_id)
     }
 }

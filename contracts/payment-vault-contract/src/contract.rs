@@ -68,6 +68,10 @@ pub fn book_session(
     // Save booking
     storage::save_booking(env, &booking);
 
+    // Add booking to user and expert lists
+    storage::add_booking_to_user_list(env, user, booking_id);
+    storage::add_booking_to_expert_list(env, expert, booking_id);
+
     // Emit event for booking creation
     events::booking_created(env, booking_id, user, expert, total_deposit);
 
