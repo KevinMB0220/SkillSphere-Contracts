@@ -1,7 +1,7 @@
 #![cfg(test)]
 use crate::{PaymentVaultContract, PaymentVaultContractClient};
 use soroban_sdk::{
-    testutils::Address as _,
+    testutils::{Address as _, Ledger},
     token, Address, Env,
 };
 
@@ -218,5 +218,138 @@ fn test_booking_not_found() {
 
     // Try to finalize non-existent booking
     let result = client.try_finalize_session(&999, &50);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_reclaim_stale_session_too_early() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    // Create booking
+    let rate = 10_i128;
+    let booked_duration = 100_u64;
+    let booking_id = client.create_booking(&user, &expert, &rate, &booked_duration);
+
+    // User tries to reclaim immediately (should fail - too early)
+    let result = client.try_reclaim_stale_session(&user, &booking_id);
+    assert!(result.is_err());
+
+    // Verify funds are still in contract
+    assert_eq!(token.balance(&client.address), 1_000);
+    assert_eq!(token.balance(&user), 9_000);
+}
+
+#[test]
+fn test_reclaim_stale_session_success() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    // Create booking
+    let rate = 10_i128;
+    let booked_duration = 100_u64;
+    let booking_id = client.create_booking(&user, &expert, &rate, &booked_duration);
+
+    // Advance ledger timestamp by 25 hours (90000 seconds)
+    env.ledger().set_timestamp(env.ledger().timestamp() + 90_000);
+
+    // User tries to reclaim after 25 hours (should succeed)
+    let result = client.try_reclaim_stale_session(&user, &booking_id);
+    assert!(result.is_ok());
+
+    // Verify funds returned to user
+    assert_eq!(token.balance(&client.address), 0);
+    assert_eq!(token.balance(&user), 10_000);
+    assert_eq!(token.balance(&expert), 0);
+}
+
+#[test]
+fn test_reclaim_stale_session_wrong_user() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let other_user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    // Create booking
+    let rate = 10_i128;
+    let booked_duration = 100_u64;
+    let booking_id = client.create_booking(&user, &expert, &rate, &booked_duration);
+
+    // Advance ledger timestamp by 25 hours
+    env.ledger().set_timestamp(env.ledger().timestamp() + 90_000);
+
+    // Other user tries to reclaim (should fail - not authorized)
+    let result = client.try_reclaim_stale_session(&other_user, &booking_id);
+    assert!(result.is_err());
+
+    // Verify funds still in contract
+    assert_eq!(token.balance(&client.address), 1_000);
+}
+
+#[test]
+fn test_reclaim_already_finalized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    // Create booking
+    let rate = 10_i128;
+    let booked_duration = 100_u64;
+    let booking_id = client.create_booking(&user, &expert, &rate, &booked_duration);
+
+    // Oracle finalizes the session
+    client.finalize_session(&booking_id, &50);
+
+    // Advance ledger timestamp by 25 hours
+    env.ledger().set_timestamp(env.ledger().timestamp() + 90_000);
+
+    // User tries to reclaim after finalization (should fail - not pending)
+    let result = client.try_reclaim_stale_session(&user, &booking_id);
     assert!(result.is_err());
 }
