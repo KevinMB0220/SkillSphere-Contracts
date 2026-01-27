@@ -27,7 +27,7 @@ pub fn emit_status_change(
         admin,
     };
 
-    // We publish with the topic "status_change" so indexers can find it easily
+    // published with the topic "status_change" so indexers can find it easily
     env.events()
         .publish((Symbol::new(env, "status_change"),), event);
 }
