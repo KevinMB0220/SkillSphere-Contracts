@@ -1,4 +1,5 @@
 use soroban_sdk::contracttype;
+use soroban_sdk::String;
 
 // 1. Expert Status Enum
 #[contracttype]
@@ -16,4 +17,5 @@ pub enum ExpertStatus {
 pub struct ExpertRecord {
     pub status: ExpertStatus,
     pub updated_at: u64, // Ledger timestamp of the last change
+    pub data_uri: String,
 }
