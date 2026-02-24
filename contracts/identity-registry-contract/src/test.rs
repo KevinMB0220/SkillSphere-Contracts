@@ -3,10 +3,12 @@
 extern crate std;
 
 use crate::error::RegistryError;
-use crate::{IdentityRegistryContract, IdentityRegistryContractClient};
 use crate::{storage, types::ExpertStatus};
-use soroban_sdk::{Env, testutils::Address as _, Symbol, Address, IntoVal, TryIntoVal, vec, String};
+use crate::{IdentityRegistryContract, IdentityRegistryContractClient};
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
+use soroban_sdk::{
+    testutils::Address as _, vec, Address, Env, IntoVal, String, Symbol, TryIntoVal,
+};
 
 #[test]
 fn test_initialization() {
@@ -113,7 +115,12 @@ fn test_batch_verification_no_admin() {
     let contract_id = env.register(IdentityRegistryContract, ());
     let client = IdentityRegistryContractClient::new(&env, &contract_id);
 
-    let experts = vec![&env, Address::generate(&env), Address::generate(&env), Address::generate(&env)];
+    let experts = vec![
+        &env,
+        Address::generate(&env),
+        Address::generate(&env),
+        Address::generate(&env),
+    ];
 
     client.batch_add_experts(&experts);
 }
@@ -135,16 +142,38 @@ fn test_batch_verification_check_status() {
     let e4 = Address::generate(&env);
     let e5 = Address::generate(&env);
 
-    let experts = vec![&env, e1.clone(), e2.clone(), e3.clone(), e4.clone(), e5.clone()];
+    let experts = vec![
+        &env,
+        e1.clone(),
+        e2.clone(),
+        e3.clone(),
+        e4.clone(),
+        e5.clone(),
+    ];
 
     client.batch_add_experts(&experts);
 
-    env.as_contract(&contract_id, ||{
-        assert_eq!(storage::get_expert_status(&env, &e1), ExpertStatus::Verified);
-        assert_eq!(storage::get_expert_status(&env, &e2), ExpertStatus::Verified);
-        assert_eq!(storage::get_expert_status(&env, &e3), ExpertStatus::Verified);
-        assert_eq!(storage::get_expert_status(&env, &e4), ExpertStatus::Verified);
-        assert_eq!(storage::get_expert_status(&env, &e5), ExpertStatus::Verified);
+    env.as_contract(&contract_id, || {
+        assert_eq!(
+            storage::get_expert_status(&env, &e1),
+            ExpertStatus::Verified
+        );
+        assert_eq!(
+            storage::get_expert_status(&env, &e2),
+            ExpertStatus::Verified
+        );
+        assert_eq!(
+            storage::get_expert_status(&env, &e3),
+            ExpertStatus::Verified
+        );
+        assert_eq!(
+            storage::get_expert_status(&env, &e4),
+            ExpertStatus::Verified
+        );
+        assert_eq!(
+            storage::get_expert_status(&env, &e5),
+            ExpertStatus::Verified
+        );
     })
 }
 
@@ -165,12 +194,32 @@ fn test_batch_verification_max_vec() {
     let e3 = Address::generate(&env);
     let e4 = Address::generate(&env);
 
-    let experts = vec![&env, e1.clone(), e2.clone(), e3.clone(), e4.clone(), 
-        e1.clone(), e2.clone(), e3.clone(), e4.clone(), 
-        e1.clone(), e2.clone(), e3.clone(), e4.clone(), 
-        e1.clone(), e2.clone(), e3.clone(), e4.clone(),
-        e1.clone(), e2.clone(), e3.clone(), e4.clone(),
-        e1.clone(), e2.clone(), e3.clone(), e4.clone()
+    let experts = vec![
+        &env,
+        e1.clone(),
+        e2.clone(),
+        e3.clone(),
+        e4.clone(),
+        e1.clone(),
+        e2.clone(),
+        e3.clone(),
+        e4.clone(),
+        e1.clone(),
+        e2.clone(),
+        e3.clone(),
+        e4.clone(),
+        e1.clone(),
+        e2.clone(),
+        e3.clone(),
+        e4.clone(),
+        e1.clone(),
+        e2.clone(),
+        e3.clone(),
+        e4.clone(),
+        e1.clone(),
+        e2.clone(),
+        e3.clone(),
+        e4.clone(),
     ];
 
     client.batch_add_experts(&experts);
@@ -445,4 +494,90 @@ fn test_getters() {
     client.ban_expert(&expert);
     assert_eq!(client.is_verified(&expert), false);
     assert_eq!(client.get_status(&expert), ExpertStatus::Banned);
+}
+
+#[test]
+fn test_expert_directory_enumeration() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let expert1 = Address::generate(&env);
+    let expert2 = Address::generate(&env);
+    let expert3 = Address::generate(&env);
+
+    client.init(&admin);
+
+    // Verify 3 separate experts
+    let uri1 = String::from_str(&env, "ipfs://e1");
+    let uri2 = String::from_str(&env, "ipfs://e2");
+    let uri3 = String::from_str(&env, "ipfs://e3");
+    client.add_expert(&expert1, &uri1);
+    client.add_expert(&expert2, &uri2);
+    client.add_expert(&expert3, &uri3);
+
+    // Total should be 3
+    assert_eq!(client.get_total_experts(), 3u64);
+
+    // Indices 0, 1, 2 should return experts in chronological order
+    assert_eq!(client.get_expert_by_index(&0u64), expert1);
+    assert_eq!(client.get_expert_by_index(&1u64), expert2);
+    assert_eq!(client.get_expert_by_index(&2u64), expert3);
+}
+
+#[test]
+fn test_expert_directory_no_duplicates_on_reverify() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let expert = Address::generate(&env);
+
+    client.init(&admin);
+
+    let uri = String::from_str(&env, "ipfs://expert");
+    client.add_expert(&expert, &uri);
+
+    // Total is 1
+    assert_eq!(client.get_total_experts(), 1u64);
+
+    // Re-verifying an already verified expert returns AlreadyVerified
+    let result = client.try_add_expert(&expert, &uri);
+    assert_eq!(result, Err(Ok(RegistryError::AlreadyVerified)));
+
+    // Total remains 1 — no duplicate in the index
+    assert_eq!(client.get_total_experts(), 1u64);
+}
+
+#[test]
+fn test_expert_directory_via_batch_add() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let expert1 = Address::generate(&env);
+    let expert2 = Address::generate(&env);
+    let expert3 = Address::generate(&env);
+
+    client.init(&admin);
+
+    let experts = vec![&env, expert1.clone(), expert2.clone(), expert3.clone()];
+    client.batch_add_experts(&experts);
+
+    // Total should be 3
+    assert_eq!(client.get_total_experts(), 3u64);
+
+    // Indices should map correctly
+    assert_eq!(client.get_expert_by_index(&0u64), expert1);
+    assert_eq!(client.get_expert_by_index(&1u64), expert2);
+    assert_eq!(client.get_expert_by_index(&2u64), expert3);
 }
