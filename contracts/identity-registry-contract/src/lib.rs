@@ -10,7 +10,7 @@ mod types;
 
 use crate::error::RegistryError;
 use crate::types::ExpertStatus;
-use soroban_sdk::{contract, contractimpl, Address, Env, Vec, String};
+use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
 
 #[contract]
 pub struct IdentityRegistryContract;
@@ -22,7 +22,7 @@ impl IdentityRegistryContract {
         contract::initialize_registry(&env, &admin)
     }
 
-  /// Batch Add an expert to the whitelist (Admin only)
+    /// Batch Add an expert to the whitelist (Admin only)
     pub fn batch_add_experts(env: Env, experts: Vec<Address>) -> Result<(), RegistryError> {
         contract::batch_add_experts(env, experts)
     }
@@ -41,6 +41,16 @@ impl IdentityRegistryContract {
     /// Ban an expert and revoke their verification status (Admin only)
     pub fn ban_expert(env: Env, expert: Address) -> Result<(), RegistryError> {
         contract::ban_expert(&env, &expert)
+    }
+
+    /// Get the total number of verified experts ever added to the directory
+    pub fn get_total_experts(env: Env) -> u64 {
+        contract::get_total_experts(&env)
+    }
+
+    /// Get the expert address at the given index in the directory
+    pub fn get_expert_by_index(env: Env, index: u64) -> Address {
+        contract::get_expert_by_index(&env, index)
     }
 
     /// Get the current status of an expert

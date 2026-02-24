@@ -1,7 +1,7 @@
-use soroban_sdk::{Address, Env, Vec, String};
-use crate::storage;
 use crate::events;
+use crate::storage;
 use crate::{error::RegistryError, types::ExpertStatus};
+use soroban_sdk::{Address, Env, String, Vec};
 
 /// Initialize the registry with an admin address
 pub fn initialize_registry(env: &Env, admin: &Address) -> Result<(), RegistryError> {
@@ -16,7 +16,7 @@ pub fn initialize_registry(env: &Env, admin: &Address) -> Result<(), RegistryErr
 
 /// Verify an expert by setting their status to Verified (Admin only)
 /// Batch Verification
-pub fn batch_add_experts(env:Env, experts: Vec<Address>) -> Result<(), RegistryError> {
+pub fn batch_add_experts(env: Env, experts: Vec<Address>) -> Result<(), RegistryError> {
     if experts.len() > 20 {
         return Err(RegistryError::ExpertVecMax);
     }
@@ -32,6 +32,7 @@ pub fn batch_add_experts(env:Env, experts: Vec<Address>) -> Result<(), RegistryE
         // Default empty URI for batch adds
         let empty_uri = String::from_str(&env, "");
         storage::set_expert_record(&env, &expert, ExpertStatus::Verified, empty_uri);
+        storage::add_expert_to_index(&env, &expert);
         events::emit_status_change(&env, expert, status, ExpertStatus::Verified, admin.clone());
     }
 
@@ -77,6 +78,7 @@ pub fn verify_expert(env: &Env, expert: &Address, data_uri: String) -> Result<()
     }
 
     storage::set_expert_record(env, expert, ExpertStatus::Verified, data_uri);
+    storage::add_expert_to_index(env, expert);
 
     events::emit_status_change(
         env,
@@ -113,6 +115,16 @@ pub fn ban_expert(env: &Env, expert: &Address) -> Result<(), RegistryError> {
     );
 
     Ok(())
+}
+
+/// Get the total number of verified experts ever indexed
+pub fn get_total_experts(env: &Env) -> u64 {
+    storage::get_total_experts(env)
+}
+
+/// Get the expert address at the given index
+pub fn get_expert_by_index(env: &Env, index: u64) -> Address {
+    storage::get_expert_by_index(env, index)
 }
 
 /// Get the current status of an expert

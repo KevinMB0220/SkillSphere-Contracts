@@ -7,6 +7,8 @@ use soroban_sdk::{contracttype, Address, Env, String};
 pub enum DataKey {
     Admin,
     Expert(Address),
+    VerifiedExpertIndex(u64),
+    TotalVerifiedCount,
 }
 
 // Constants for TTL (Time To Live)
@@ -86,4 +88,44 @@ pub fn get_expert_record(env: &Env, expert: &Address) -> ExpertRecord {
 /// Get the expert status
 pub fn get_expert_status(env: &Env, expert: &Address) -> ExpertStatus {
     get_expert_record(env, expert).status
+}
+
+// ... [Expert Directory Index Helpers] ...
+
+/// Add an expert address to the enumerable index and increment the count
+pub fn add_expert_to_index(env: &Env, expert: &Address) {
+    let count: u64 = env
+        .storage()
+        .instance()
+        .get(&DataKey::TotalVerifiedCount)
+        .unwrap_or(0u64);
+
+    env.storage()
+        .persistent()
+        .set(&DataKey::VerifiedExpertIndex(count), expert);
+    env.storage().persistent().extend_ttl(
+        &DataKey::VerifiedExpertIndex(count),
+        LEDGERS_THRESHOLD,
+        LEDGERS_EXTEND_TO,
+    );
+
+    env.storage()
+        .instance()
+        .set(&DataKey::TotalVerifiedCount, &(count + 1));
+}
+
+/// Get the total number of verified experts ever indexed
+pub fn get_total_experts(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get(&DataKey::TotalVerifiedCount)
+        .unwrap_or(0u64)
+}
+
+/// Get the expert address at the given index
+pub fn get_expert_by_index(env: &Env, index: u64) -> Address {
+    env.storage()
+        .persistent()
+        .get(&DataKey::VerifiedExpertIndex(index))
+        .expect("Index out of bounds")
 }
