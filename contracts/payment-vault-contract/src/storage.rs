@@ -1,5 +1,5 @@
-use soroban_sdk::{contracttype, Address, Env};
 use crate::types::{BookingRecord, BookingStatus};
+use soroban_sdk::{contracttype, Address, Env};
 
 #[contracttype]
 #[derive(Clone)]
@@ -7,10 +7,11 @@ pub enum DataKey {
     Admin,
     Token,
     Oracle,
-    Booking(u64), // Booking ID -> BookingRecord
-    BookingCounter, // Counter for generating unique booking IDs
-    UserBookings(Address), // User Address -> Vec<u64> of booking IDs
+    Booking(u64),            // Booking ID -> BookingRecord
+    BookingCounter,          // Counter for generating unique booking IDs
+    UserBookings(Address),   // User Address -> Vec<u64> of booking IDs
     ExpertBookings(Address), // Expert Address -> Vec<u64> of booking IDs
+    ExpertRate(Address),     // Expert Address -> rate per second (i128)
 }
 
 // --- Admin ---
@@ -53,7 +54,9 @@ pub fn get_next_booking_id(env: &Env) -> u64 {
         .get(&DataKey::BookingCounter)
         .unwrap_or(0);
     let next = current + 1;
-    env.storage().instance().set(&DataKey::BookingCounter, &next);
+    env.storage()
+        .instance()
+        .set(&DataKey::BookingCounter, &next);
     next
 }
 
@@ -118,4 +121,17 @@ pub fn get_expert_bookings(env: &Env, expert: &Address) -> soroban_sdk::Vec<u64>
         .persistent()
         .get(&DataKey::ExpertBookings(expert.clone()))
         .unwrap_or(soroban_sdk::Vec::new(env))
+}
+
+// --- Expert Rates ---
+pub fn set_expert_rate(env: &Env, expert: &Address, rate: i128) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::ExpertRate(expert.clone()), &rate);
+}
+
+pub fn get_expert_rate(env: &Env, expert: &Address) -> Option<i128> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::ExpertRate(expert.clone()))
 }
