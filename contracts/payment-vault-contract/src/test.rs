@@ -58,7 +58,10 @@ fn test_partial_duration_scenario() {
     // Total deposit = 10 * 100 = 1000 tokens
     let rate_per_second = 10_i128;
     let max_duration = 100_u64;
-    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+    let booking_id = {
+        client.set_my_rate(&expert, &rate_per_second);
+        client.book_session(&user, &expert, &max_duration)
+    };
 
     // Verify user's balance decreased
     assert_eq!(token.balance(&user), 9_000);
@@ -94,7 +97,10 @@ fn test_full_duration_no_refund() {
     // Book session
     let rate_per_second = 10_i128;
     let max_duration = 100_u64;
-    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+    let booking_id = {
+        client.set_my_rate(&expert, &rate_per_second);
+        client.book_session(&user, &expert, &max_duration)
+    };
 
     // Oracle finalizes with full duration (100 seconds)
     let actual_duration = 100_u64;
@@ -125,7 +131,10 @@ fn test_double_finalization_protection() {
 
     let rate_per_second = 10_i128;
     let max_duration = 100_u64;
-    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+    let booking_id = {
+        client.set_my_rate(&expert, &rate_per_second);
+        client.book_session(&user, &expert, &max_duration)
+    };
 
     // First finalization succeeds
     let actual_duration = 50_u64;
@@ -156,7 +165,10 @@ fn test_oracle_authorization_enforcement() {
 
     let rate_per_second = 10_i128;
     let max_duration = 100_u64;
-    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+    let booking_id = {
+        client.set_my_rate(&expert, &rate_per_second);
+        client.book_session(&user, &expert, &max_duration)
+    };
 
     // Clear all mocked auths to test Oracle authorization
     env.set_auths(&[]);
@@ -192,7 +204,10 @@ fn test_zero_duration_finalization() {
 
     let rate_per_second = 10_i128;
     let max_duration = 100_u64;
-    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+    let booking_id = {
+        client.set_my_rate(&expert, &rate_per_second);
+        client.book_session(&user, &expert, &max_duration)
+    };
 
     // Oracle finalizes with 0 duration (session cancelled)
     let actual_duration = 0_u64;
@@ -255,7 +270,10 @@ fn test_book_session_balance_transfer() {
     assert_eq!(token.balance(&client.address), 0);
 
     // Book session
-    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+    let booking_id = {
+        client.set_my_rate(&expert, &rate_per_second);
+        client.book_session(&user, &expert, &max_duration)
+    };
 
     // Acceptance Criteria #1: User's balance decreases
     assert_eq!(token.balance(&user), initial_balance - expected_deposit);
@@ -268,7 +286,10 @@ fn test_book_session_balance_transfer() {
 
     // Create another booking to verify uniqueness
     token.mint(&user, &expected_deposit); // Mint more tokens for second booking
-    let booking_id_2 = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+    let booking_id_2 = {
+        client.set_my_rate(&expert, &rate_per_second);
+        client.book_session(&user, &expert, &max_duration)
+    };
 
     // Second booking should have different ID
     assert_eq!(booking_id_2, 2);
@@ -296,8 +317,14 @@ fn test_get_user_and_expert_bookings() {
     // Create 2 bookings for the same user with different experts
     let rate_per_second = 10_i128;
     let max_duration = 100_u64;
-    let booking_id_1 = client.book_session(&user, &expert1, &rate_per_second, &max_duration);
-    let booking_id_2 = client.book_session(&user, &expert2, &rate_per_second, &max_duration);
+    let booking_id_1 = {
+        client.set_my_rate(&expert1, &rate_per_second);
+        client.book_session(&user, &expert1, &max_duration)
+    };
+    let booking_id_2 = {
+        client.set_my_rate(&expert2, &rate_per_second);
+        client.book_session(&user, &expert2, &max_duration)
+    };
 
     // Test get_user_bookings - should return 2 bookings
     let user_bookings = client.get_user_bookings(&user);
@@ -349,7 +376,10 @@ fn test_reclaim_stale_session_too_early() {
     // Create booking
     let rate_per_second = 10_i128;
     let max_duration = 100_u64;
-    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+    let booking_id = {
+        client.set_my_rate(&expert, &rate_per_second);
+        client.book_session(&user, &expert, &max_duration)
+    };
 
     // User tries to reclaim immediately (should fail - too early)
     let result = client.try_reclaim_stale_session(&user, &booking_id);
@@ -380,10 +410,14 @@ fn test_reclaim_stale_session_success() {
     // Create booking
     let rate_per_second = 10_i128;
     let max_duration = 100_u64;
-    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+    let booking_id = {
+        client.set_my_rate(&expert, &rate_per_second);
+        client.book_session(&user, &expert, &max_duration)
+    };
 
     // Advance ledger timestamp by 25 hours (90000 seconds)
-    env.ledger().set_timestamp(env.ledger().timestamp() + 90_000);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 90_000);
 
     // User tries to reclaim after 25 hours (should succeed)
     let result = client.try_reclaim_stale_session(&user, &booking_id);
@@ -416,10 +450,14 @@ fn test_reclaim_stale_session_wrong_user() {
     // Create booking
     let rate_per_second = 10_i128;
     let max_duration = 100_u64;
-    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+    let booking_id = {
+        client.set_my_rate(&expert, &rate_per_second);
+        client.book_session(&user, &expert, &max_duration)
+    };
 
     // Advance ledger timestamp by 25 hours
-    env.ledger().set_timestamp(env.ledger().timestamp() + 90_000);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 90_000);
 
     // Other user tries to reclaim (should fail - not authorized)
     let result = client.try_reclaim_stale_session(&other_user, &booking_id);
@@ -449,13 +487,17 @@ fn test_reclaim_already_finalized() {
     // Create booking
     let rate_per_second = 10_i128;
     let max_duration = 100_u64;
-    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+    let booking_id = {
+        client.set_my_rate(&expert, &rate_per_second);
+        client.book_session(&user, &expert, &max_duration)
+    };
 
     // Oracle finalizes the session
     client.finalize_session(&booking_id, &50);
 
     // Advance ledger timestamp by 25 hours
-    env.ledger().set_timestamp(env.ledger().timestamp() + 90_000);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 90_000);
 
     // User tries to reclaim after finalization (should fail - not pending)
     let result = client.try_reclaim_stale_session(&user, &booking_id);
@@ -482,7 +524,10 @@ fn test_expert_rejects_pending_session() {
     // Create booking
     let rate_per_second = 10_i128;
     let max_duration = 100_u64;
-    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+    let booking_id = {
+        client.set_my_rate(&expert, &rate_per_second);
+        client.book_session(&user, &expert, &max_duration)
+    };
 
     // Verify initial state
     assert_eq!(token.balance(&user), 9_000);
@@ -522,7 +567,10 @@ fn test_user_cannot_reject_session() {
 
     let rate_per_second = 10_i128;
     let max_duration = 100_u64;
-    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+    let booking_id = {
+        client.set_my_rate(&expert, &rate_per_second);
+        client.book_session(&user, &expert, &max_duration)
+    };
 
     // User tries to reject their own session (should fail - not authorized)
     let result = client.try_reject_session(&user, &booking_id);
@@ -551,7 +599,10 @@ fn test_reject_already_complete_session() {
 
     let rate_per_second = 10_i128;
     let max_duration = 100_u64;
-    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+    let booking_id = {
+        client.set_my_rate(&expert, &rate_per_second);
+        client.book_session(&user, &expert, &max_duration)
+    };
 
     // Oracle finalizes the session
     client.finalize_session(&booking_id, &50);
@@ -580,10 +631,14 @@ fn test_reject_already_reclaimed_session() {
 
     let rate_per_second = 10_i128;
     let max_duration = 100_u64;
-    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+    let booking_id = {
+        client.set_my_rate(&expert, &rate_per_second);
+        client.book_session(&user, &expert, &max_duration)
+    };
 
     // Advance time and user reclaims
-    env.ledger().set_timestamp(env.ledger().timestamp() + 90_000);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 90_000);
     client.reclaim_stale_session(&user, &booking_id);
 
     // Expert tries to reject after reclamation (should fail - not pending)
@@ -611,7 +666,10 @@ fn test_wrong_expert_cannot_reject() {
 
     let rate_per_second = 10_i128;
     let max_duration = 100_u64;
-    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+    let booking_id = {
+        client.set_my_rate(&expert, &rate_per_second);
+        client.book_session(&user, &expert, &max_duration)
+    };
 
     // Different expert tries to reject (should fail - not authorized)
     let result = client.try_reject_session(&wrong_expert, &booking_id);
@@ -639,3 +697,87 @@ fn test_reject_nonexistent_booking() {
     assert!(result.is_err());
 }
 
+#[test]
+fn test_expert_can_set_and_update_rate() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let token = Address::generate(&env);
+
+    let client = create_client(&env);
+    client.init(&admin, &token, &oracle);
+
+    // Initial set
+    let res1 = client.try_set_my_rate(&expert, &10_i128);
+    assert!(res1.is_ok());
+
+    // Update rate
+    let res2 = client.try_set_my_rate(&expert, &25_i128);
+    assert!(res2.is_ok());
+
+    // Fails with invalid rate
+    let res3 = client.try_set_my_rate(&expert, &0_i128);
+    assert!(res3.is_err());
+}
+
+#[test]
+fn test_book_session_calculates_correct_deposit() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    let initial_balance = 5_000_i128;
+    token.mint(&user, &initial_balance);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    // Set expert rate
+    let stored_rate = 15_i128;
+    client.set_my_rate(&expert, &stored_rate);
+
+    // Book session
+    let max_duration = 100_u64;
+    let expected_deposit = stored_rate * (max_duration as i128); // 1500 tokens
+
+    let booking_id = client.book_session(&user, &expert, &max_duration);
+
+    // Verify correct deposit was extracted
+    assert_eq!(token.balance(&user), initial_balance - expected_deposit);
+    assert_eq!(token.balance(&client.address), expected_deposit);
+}
+
+#[test]
+fn test_book_session_fails_if_expert_rate_not_set() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &5_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    // Expert has NOT set rate
+
+    // Book session should fail
+    let max_duration = 100_u64;
+    let res = client.try_book_session(&user, &expert, &max_duration);
+
+    assert!(res.is_err());
+}

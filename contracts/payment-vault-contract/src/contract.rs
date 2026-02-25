@@ -1,14 +1,14 @@
-use soroban_sdk::{Address, Env, token};
-use crate::storage;
-use crate::types::{BookingRecord, BookingStatus};
 use crate::error::VaultError;
 use crate::events;
+use crate::storage;
+use crate::types::{BookingRecord, BookingStatus};
+use soroban_sdk::{token, Address, Env};
 
 pub fn initialize_vault(
     env: &Env,
     admin: &Address,
     token: &Address,
-    oracle: &Address
+    oracle: &Address,
 ) -> Result<(), VaultError> {
     // 1. Check if already initialized
     if storage::has_admin(env) {
@@ -23,15 +23,31 @@ pub fn initialize_vault(
     Ok(())
 }
 
+pub fn set_my_rate(env: &Env, expert: &Address, rate_per_second: i128) -> Result<(), VaultError> {
+    expert.require_auth();
+
+    if rate_per_second <= 0 {
+        return Err(VaultError::InvalidAmount);
+    }
+
+    storage::set_expert_rate(env, expert, rate_per_second);
+    events::expert_rate_updated(env, expert, rate_per_second);
+
+    Ok(())
+}
+
 pub fn book_session(
     env: &Env,
     user: &Address,
     expert: &Address,
-    rate_per_second: i128,
     max_duration: u64,
 ) -> Result<u64, VaultError> {
     // Require authorization from the user creating the booking
     user.require_auth();
+
+    // Fetch the expert's rate
+    let rate_per_second =
+        storage::get_expert_rate(env, expert).ok_or(VaultError::ExpertRateNotSet)?;
 
     // Validate rate
     if rate_per_second <= 0 {
@@ -89,8 +105,7 @@ pub fn finalize_session(
     oracle.require_auth();
 
     // 2. Get booking and verify it exists
-    let booking = storage::get_booking(env, booking_id)
-        .ok_or(VaultError::BookingNotFound)?;
+    let booking = storage::get_booking(env, booking_id).ok_or(VaultError::BookingNotFound)?;
 
     // 3. Verify booking is in Pending status
     if booking.status != BookingStatus::Pending {
@@ -134,17 +149,12 @@ pub fn finalize_session(
 /// 24 hours in seconds
 const RECLAIM_TIMEOUT: u64 = 86400;
 
-pub fn reclaim_stale_session(
-    env: &Env,
-    user: &Address,
-    booking_id: u64,
-) -> Result<(), VaultError> {
+pub fn reclaim_stale_session(env: &Env, user: &Address, booking_id: u64) -> Result<(), VaultError> {
     // 1. Require user authorization
     user.require_auth();
 
     // 2. Get booking and verify it exists
-    let booking = storage::get_booking(env, booking_id)
-        .ok_or(VaultError::BookingNotFound)?;
+    let booking = storage::get_booking(env, booking_id).ok_or(VaultError::BookingNotFound)?;
 
     // 3. Verify the caller is the booking owner
     if booking.user != *user {
@@ -177,17 +187,12 @@ pub fn reclaim_stale_session(
     Ok(())
 }
 
-pub fn reject_session(
-    env: &Env,
-    expert: &Address,
-    booking_id: u64,
-) -> Result<(), VaultError> {
+pub fn reject_session(env: &Env, expert: &Address, booking_id: u64) -> Result<(), VaultError> {
     // 1. Require expert authorization
     expert.require_auth();
 
     // 2. Get booking and verify it exists
-    let booking = storage::get_booking(env, booking_id)
-        .ok_or(VaultError::BookingNotFound)?;
+    let booking = storage::get_booking(env, booking_id).ok_or(VaultError::BookingNotFound)?;
 
     // 3. Verify the caller is the expert in the booking
     if booking.expert != *expert {

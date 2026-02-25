@@ -4,13 +4,13 @@ mod contract;
 mod error;
 mod events;
 mod storage;
-mod types;
 #[cfg(test)]
 mod test;
+mod types;
 
-use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
 use crate::error::VaultError;
 use crate::types::BookingRecord;
+use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
 
 #[contract]
 pub struct PaymentVaultContract;
@@ -22,9 +22,14 @@ impl PaymentVaultContract {
         env: Env,
         admin: Address,
         token: Address,
-        oracle: Address
+        oracle: Address,
     ) -> Result<(), VaultError> {
         contract::initialize_vault(&env, &admin, &token, &oracle)
+    }
+
+    /// Set an expert's own rate per second
+    pub fn set_my_rate(env: Env, expert: Address, rate_per_second: i128) -> Result<(), VaultError> {
+        contract::set_my_rate(&env, &expert, rate_per_second)
     }
 
     /// Book a session with an expert
@@ -33,10 +38,9 @@ impl PaymentVaultContract {
         env: Env,
         user: Address,
         expert: Address,
-        rate_per_second: i128,
         max_duration: u64,
     ) -> Result<u64, VaultError> {
-        contract::book_session(&env, &user, &expert, rate_per_second, max_duration)
+        contract::book_session(&env, &user, &expert, max_duration)
     }
 
     /// Finalize a session (Oracle-only)
@@ -61,11 +65,7 @@ impl PaymentVaultContract {
 
     /// Reject a pending session (Expert-only)
     /// Experts can reject a pending booking, instantly refunding the user
-    pub fn reject_session(
-        env: Env,
-        expert: Address,
-        booking_id: u64,
-    ) -> Result<(), VaultError> {
+    pub fn reject_session(env: Env, expert: Address, booking_id: u64) -> Result<(), VaultError> {
         contract::reject_session(&env, &expert, booking_id)
     }
 
