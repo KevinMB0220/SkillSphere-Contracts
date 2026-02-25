@@ -1,9 +1,16 @@
-use soroban_sdk::{Address, Env, symbol_short};
+use soroban_sdk::{symbol_short, Address, Env};
 
 /// Emitted when a new booking is created
-pub fn booking_created(env: &Env, booking_id: u64, user: &Address, expert: &Address, deposit: i128) {
+pub fn booking_created(
+    env: &Env,
+    booking_id: u64,
+    user: &Address,
+    expert: &Address,
+    deposit: i128,
+) {
     let topics = (symbol_short!("booked"), booking_id);
-    env.events().publish(topics, (user.clone(), expert.clone(), deposit));
+    env.events()
+        .publish(topics, (user.clone(), expert.clone(), deposit));
 }
 
 /// Emitted when a session is finalized
@@ -15,6 +22,12 @@ pub fn session_finalized(env: &Env, booking_id: u64, actual_duration: u64, total
 pub fn session_reclaimed(env: &Env, booking_id: u64, amount: i128) {
     let topics = (symbol_short!("reclaim"), booking_id);
     env.events().publish(topics, amount);
+}
+
+/// Emitted when the contract is paused or unpaused
+pub fn contract_paused(env: &Env, paused: bool) {
+    let topics = (symbol_short!("paused"),);
+    env.events().publish(topics, paused);
 }
 
 /// Emitted when an expert rejects a pending session
