@@ -383,7 +383,8 @@ fn test_reclaim_stale_session_success() {
     let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
 
     // Advance ledger timestamp by 25 hours (90000 seconds)
-    env.ledger().set_timestamp(env.ledger().timestamp() + 90_000);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 90_000);
 
     // User tries to reclaim after 25 hours (should succeed)
     let result = client.try_reclaim_stale_session(&user, &booking_id);
@@ -419,7 +420,8 @@ fn test_reclaim_stale_session_wrong_user() {
     let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
 
     // Advance ledger timestamp by 25 hours
-    env.ledger().set_timestamp(env.ledger().timestamp() + 90_000);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 90_000);
 
     // Other user tries to reclaim (should fail - not authorized)
     let result = client.try_reclaim_stale_session(&other_user, &booking_id);
@@ -455,7 +457,8 @@ fn test_reclaim_already_finalized() {
     client.finalize_session(&booking_id, &50);
 
     // Advance ledger timestamp by 25 hours
-    env.ledger().set_timestamp(env.ledger().timestamp() + 90_000);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 90_000);
 
     // User tries to reclaim after finalization (should fail - not pending)
     let result = client.try_reclaim_stale_session(&user, &booking_id);
@@ -583,7 +586,8 @@ fn test_reject_already_reclaimed_session() {
     let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
 
     // Advance time and user reclaims
-    env.ledger().set_timestamp(env.ledger().timestamp() + 90_000);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 90_000);
     client.reclaim_stale_session(&user, &booking_id);
 
     // Expert tries to reject after reclamation (should fail - not pending)
@@ -639,3 +643,191 @@ fn test_reject_nonexistent_booking() {
     assert!(result.is_err());
 }
 
+// ==================== Pausability (Circuit Breaker) Tests ====================
+
+#[test]
+fn test_pause_blocks_book_session() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    // Admin pauses the contract
+    let result = client.try_pause();
+    assert!(result.is_ok());
+
+    // User tries to book a session while paused (should fail)
+    let result = client.try_book_session(&user, &expert, &10, &100);
+    assert!(result.is_err());
+
+    // Verify user's balance is unchanged
+    assert_eq!(token.balance(&user), 10_000);
+}
+
+#[test]
+fn test_pause_blocks_finalize_session() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    // Book session while unpaused
+    let booking_id = client.book_session(&user, &expert, &10, &100);
+
+    // Admin pauses the contract
+    client.pause();
+
+    // Oracle tries to finalize while paused (should fail)
+    let result = client.try_finalize_session(&booking_id, &50);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_pause_blocks_reclaim_stale_session() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    // Book session while unpaused
+    let booking_id = client.book_session(&user, &expert, &10, &100);
+
+    // Advance time past reclaim timeout
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 90_000);
+
+    // Admin pauses the contract
+    client.pause();
+
+    // User tries to reclaim while paused (should fail)
+    let result = client.try_reclaim_stale_session(&user, &booking_id);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_pause_blocks_reject_session() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    // Book session while unpaused
+    let booking_id = client.book_session(&user, &expert, &10, &100);
+
+    // Admin pauses the contract
+    client.pause();
+
+    // Expert tries to reject while paused (should fail)
+    let result = client.try_reject_session(&expert, &booking_id);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_unpause_resumes_operations() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    // Admin pauses the contract
+    client.pause();
+
+    // Booking should fail while paused
+    let result = client.try_book_session(&user, &expert, &10, &100);
+    assert!(result.is_err());
+
+    // Admin unpauses the contract
+    let result = client.try_unpause();
+    assert!(result.is_ok());
+
+    // Booking should succeed after unpause
+    let booking_id = client.book_session(&user, &expert, &10, &100);
+    assert_eq!(booking_id, 1);
+    assert_eq!(token.balance(&user), 9_000);
+    assert_eq!(token.balance(&client.address), 1_000);
+}
+
+#[test]
+fn test_read_only_functions_work_while_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    // Book a session before pausing
+    let booking_id = client.book_session(&user, &expert, &10, &100);
+
+    // Admin pauses the contract
+    client.pause();
+
+    // Read-only functions should still work
+    let booking = client.get_booking(&booking_id);
+    assert!(booking.is_some());
+    assert_eq!(booking.unwrap().id, booking_id);
+
+    let user_bookings = client.get_user_bookings(&user);
+    assert_eq!(user_bookings.len(), 1);
+
+    let expert_bookings = client.get_expert_bookings(&expert);
+    assert_eq!(expert_bookings.len(), 1);
+}
