@@ -1,5 +1,5 @@
 use crate::types::ExpertStatus;
-use soroban_sdk::{contracttype, Address, Env, Symbol, String};
+use soroban_sdk::{contracttype, Address, Env, String, Symbol};
 
 // The Event Data Structure
 #[contracttype]
