@@ -1,14 +1,14 @@
-use soroban_sdk::{Address, Env, token};
-use crate::storage;
-use crate::types::{BookingRecord, BookingStatus};
 use crate::error::VaultError;
 use crate::events;
+use crate::storage;
+use crate::types::{BookingRecord, BookingStatus};
+use soroban_sdk::{token, Address, Env};
 
 pub fn initialize_vault(
     env: &Env,
     admin: &Address,
     token: &Address,
-    oracle: &Address
+    oracle: &Address,
 ) -> Result<(), VaultError> {
     // 1. Check if already initialized
     if storage::has_admin(env) {
@@ -23,6 +23,22 @@ pub fn initialize_vault(
     Ok(())
 }
 
+pub fn pause(env: &Env) -> Result<(), VaultError> {
+    let admin = storage::get_admin(env).ok_or(VaultError::NotInitialized)?;
+    admin.require_auth();
+    storage::set_paused(env, true);
+    events::contract_paused(env, true);
+    Ok(())
+}
+
+pub fn unpause(env: &Env) -> Result<(), VaultError> {
+    let admin = storage::get_admin(env).ok_or(VaultError::NotInitialized)?;
+    admin.require_auth();
+    storage::set_paused(env, false);
+    events::contract_paused(env, false);
+    Ok(())
+}
+
 pub fn book_session(
     env: &Env,
     user: &Address,
@@ -30,6 +46,10 @@ pub fn book_session(
     rate_per_second: i128,
     max_duration: u64,
 ) -> Result<u64, VaultError> {
+    if storage::is_paused(env) {
+        return Err(VaultError::ContractPaused);
+    }
+
     // Require authorization from the user creating the booking
     user.require_auth();
 
@@ -84,13 +104,16 @@ pub fn finalize_session(
     booking_id: u64,
     actual_duration: u64,
 ) -> Result<(), VaultError> {
+    if storage::is_paused(env) {
+        return Err(VaultError::ContractPaused);
+    }
+
     // 1. Require Oracle authorization
     let oracle = storage::get_oracle(env);
     oracle.require_auth();
 
     // 2. Get booking and verify it exists
-    let booking = storage::get_booking(env, booking_id)
-        .ok_or(VaultError::BookingNotFound)?;
+    let booking = storage::get_booking(env, booking_id).ok_or(VaultError::BookingNotFound)?;
 
     // 3. Verify booking is in Pending status
     if booking.status != BookingStatus::Pending {
@@ -134,17 +157,16 @@ pub fn finalize_session(
 /// 24 hours in seconds
 const RECLAIM_TIMEOUT: u64 = 86400;
 
-pub fn reclaim_stale_session(
-    env: &Env,
-    user: &Address,
-    booking_id: u64,
-) -> Result<(), VaultError> {
+pub fn reclaim_stale_session(env: &Env, user: &Address, booking_id: u64) -> Result<(), VaultError> {
+    if storage::is_paused(env) {
+        return Err(VaultError::ContractPaused);
+    }
+
     // 1. Require user authorization
     user.require_auth();
 
     // 2. Get booking and verify it exists
-    let booking = storage::get_booking(env, booking_id)
-        .ok_or(VaultError::BookingNotFound)?;
+    let booking = storage::get_booking(env, booking_id).ok_or(VaultError::BookingNotFound)?;
 
     // 3. Verify the caller is the booking owner
     if booking.user != *user {
@@ -177,17 +199,16 @@ pub fn reclaim_stale_session(
     Ok(())
 }
 
-pub fn reject_session(
-    env: &Env,
-    expert: &Address,
-    booking_id: u64,
-) -> Result<(), VaultError> {
+pub fn reject_session(env: &Env, expert: &Address, booking_id: u64) -> Result<(), VaultError> {
+    if storage::is_paused(env) {
+        return Err(VaultError::ContractPaused);
+    }
+
     // 1. Require expert authorization
     expert.require_auth();
 
     // 2. Get booking and verify it exists
-    let booking = storage::get_booking(env, booking_id)
-        .ok_or(VaultError::BookingNotFound)?;
+    let booking = storage::get_booking(env, booking_id).ok_or(VaultError::BookingNotFound)?;
 
     // 3. Verify the caller is the expert in the booking
     if booking.expert != *expert {

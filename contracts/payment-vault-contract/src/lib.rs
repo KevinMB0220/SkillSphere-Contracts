@@ -4,13 +4,13 @@ mod contract;
 mod error;
 mod events;
 mod storage;
-mod types;
 #[cfg(test)]
 mod test;
+mod types;
 
-use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
 use crate::error::VaultError;
 use crate::types::BookingRecord;
+use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
 
 #[contract]
 pub struct PaymentVaultContract;
@@ -22,9 +22,21 @@ impl PaymentVaultContract {
         env: Env,
         admin: Address,
         token: Address,
-        oracle: Address
+        oracle: Address,
     ) -> Result<(), VaultError> {
         contract::initialize_vault(&env, &admin, &token, &oracle)
+    }
+
+    /// Pause the contract (Admin-only)
+    /// Halts all state-changing operations in an emergency
+    pub fn pause(env: Env) -> Result<(), VaultError> {
+        contract::pause(&env)
+    }
+
+    /// Unpause the contract (Admin-only)
+    /// Resumes normal contract operations
+    pub fn unpause(env: Env) -> Result<(), VaultError> {
+        contract::unpause(&env)
     }
 
     /// Book a session with an expert
@@ -61,11 +73,7 @@ impl PaymentVaultContract {
 
     /// Reject a pending session (Expert-only)
     /// Experts can reject a pending booking, instantly refunding the user
-    pub fn reject_session(
-        env: Env,
-        expert: Address,
-        booking_id: u64,
-    ) -> Result<(), VaultError> {
+    pub fn reject_session(env: Env, expert: Address, booking_id: u64) -> Result<(), VaultError> {
         contract::reject_session(&env, &expert, booking_id)
     }
 
