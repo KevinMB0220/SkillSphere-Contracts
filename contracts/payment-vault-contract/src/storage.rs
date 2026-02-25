@@ -1,5 +1,5 @@
-use soroban_sdk::{contracttype, Address, Env};
 use crate::types::{BookingRecord, BookingStatus};
+use soroban_sdk::{contracttype, Address, Env};
 
 #[contracttype]
 #[derive(Clone)]
@@ -7,10 +7,11 @@ pub enum DataKey {
     Admin,
     Token,
     Oracle,
-    Booking(u64), // Booking ID -> BookingRecord
-    BookingCounter, // Counter for generating unique booking IDs
-    UserBookings(Address), // User Address -> Vec<u64> of booking IDs
+    Booking(u64),            // Booking ID -> BookingRecord
+    BookingCounter,          // Counter for generating unique booking IDs
+    UserBookings(Address),   // User Address -> Vec<u64> of booking IDs
     ExpertBookings(Address), // Expert Address -> Vec<u64> of booking IDs
+    IsPaused,                // Circuit breaker flag
 }
 
 // --- Admin ---
@@ -45,6 +46,18 @@ pub fn get_oracle(env: &Env) -> Address {
     env.storage().instance().get(&DataKey::Oracle).unwrap()
 }
 
+// --- Pause (Circuit Breaker) ---
+pub fn set_paused(env: &Env, paused: bool) {
+    env.storage().instance().set(&DataKey::IsPaused, &paused);
+}
+
+pub fn is_paused(env: &Env) -> bool {
+    env.storage()
+        .instance()
+        .get(&DataKey::IsPaused)
+        .unwrap_or(false)
+}
+
 // --- Booking Counter ---
 pub fn get_next_booking_id(env: &Env) -> u64 {
     let current: u64 = env
@@ -53,7 +66,9 @@ pub fn get_next_booking_id(env: &Env) -> u64 {
         .get(&DataKey::BookingCounter)
         .unwrap_or(0);
     let next = current + 1;
-    env.storage().instance().set(&DataKey::BookingCounter, &next);
+    env.storage()
+        .instance()
+        .set(&DataKey::BookingCounter, &next);
     next
 }
 

@@ -11,4 +11,5 @@ pub enum VaultError {
     BookingNotPending = 5,
     InvalidAmount = 6,
     ReclaimTooEarly = 7,
+    ContractPaused = 8,
 }
