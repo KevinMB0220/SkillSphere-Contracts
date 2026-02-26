@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use soroban_sdk::{symbol_short, Address, Env};
 
 /// Emitted when a new booking is created
@@ -34,4 +35,10 @@ pub fn contract_paused(env: &Env, paused: bool) {
 pub fn session_rejected(env: &Env, booking_id: u64, reason: &str) {
     let topics = (symbol_short!("reject"), booking_id);
     env.events().publish(topics, reason);
+}
+
+/// Emitted when an expert updates their rate
+pub fn expert_rate_updated(env: &Env, expert: &Address, rate: i128) {
+    let topics = (symbol_short!("rate_upd"), expert.clone());
+    env.events().publish(topics, rate);
 }

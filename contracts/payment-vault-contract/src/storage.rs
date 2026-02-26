@@ -12,6 +12,7 @@ pub enum DataKey {
     UserBookings(Address),   // User Address -> Vec<u64> of booking IDs
     ExpertBookings(Address), // Expert Address -> Vec<u64> of booking IDs
     IsPaused,                // Circuit breaker flag
+    ExpertRate(Address),     // Expert Address -> rate per second (i128)
 }
 
 // --- Admin ---
@@ -133,4 +134,17 @@ pub fn get_expert_bookings(env: &Env, expert: &Address) -> soroban_sdk::Vec<u64>
         .persistent()
         .get(&DataKey::ExpertBookings(expert.clone()))
         .unwrap_or(soroban_sdk::Vec::new(env))
+}
+
+// --- Expert Rates ---
+pub fn set_expert_rate(env: &Env, expert: &Address, rate: i128) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::ExpertRate(expert.clone()), &rate);
+}
+
+pub fn get_expert_rate(env: &Env, expert: &Address) -> Option<i128> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::ExpertRate(expert.clone()))
 }

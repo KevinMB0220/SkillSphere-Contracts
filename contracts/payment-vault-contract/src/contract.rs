@@ -39,11 +39,23 @@ pub fn unpause(env: &Env) -> Result<(), VaultError> {
     Ok(())
 }
 
+pub fn set_my_rate(env: &Env, expert: &Address, rate_per_second: i128) -> Result<(), VaultError> {
+    expert.require_auth();
+
+    if rate_per_second <= 0 {
+        return Err(VaultError::InvalidAmount);
+    }
+
+    storage::set_expert_rate(env, expert, rate_per_second);
+    events::expert_rate_updated(env, expert, rate_per_second);
+
+    Ok(())
+}
+
 pub fn book_session(
     env: &Env,
     user: &Address,
     expert: &Address,
-    rate_per_second: i128,
     max_duration: u64,
 ) -> Result<u64, VaultError> {
     if storage::is_paused(env) {
@@ -52,6 +64,10 @@ pub fn book_session(
 
     // Require authorization from the user creating the booking
     user.require_auth();
+
+    // Fetch the expert's rate
+    let rate_per_second =
+        storage::get_expert_rate(env, expert).ok_or(VaultError::ExpertRateNotSet)?;
 
     // Validate rate
     if rate_per_second <= 0 {

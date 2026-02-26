@@ -39,16 +39,20 @@ impl PaymentVaultContract {
         contract::unpause(&env)
     }
 
+    /// Set an expert's own rate per second
+    pub fn set_my_rate(env: Env, expert: Address, rate_per_second: i128) -> Result<(), VaultError> {
+        contract::set_my_rate(&env, &expert, rate_per_second)
+    }
+
     /// Book a session with an expert
     /// User deposits tokens upfront based on rate_per_second * max_duration
     pub fn book_session(
         env: Env,
         user: Address,
         expert: Address,
-        rate_per_second: i128,
         max_duration: u64,
     ) -> Result<u64, VaultError> {
-        contract::book_session(&env, &user, &expert, rate_per_second, max_duration)
+        contract::book_session(&env, &user, &expert, max_duration)
     }
 
     /// Finalize a session (Oracle-only)
